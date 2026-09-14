@@ -1,0 +1,15 @@
+[Unit]
+Description=Cross-Bot Message Bus API (Eddie <-> Marvin)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/crossbot
+ExecStart=/opt/crossbot/bin/python /opt/crossbot/main.py
+EnvironmentFile=/opt/crossbot/env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

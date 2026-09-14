@@ -1,0 +1,13 @@
+api_key
+.env
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+*.pyc
+.venv/
+~$*.docx
+~$*.xlsx
+*.tmp
+.DS_Store
+*.bak
