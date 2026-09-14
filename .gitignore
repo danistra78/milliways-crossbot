@@ -1,4 +1,6 @@
 api_key
+.crossbot_key
+env
 .env
 *.db
 *.db-wal
