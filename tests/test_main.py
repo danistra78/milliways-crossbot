@@ -314,3 +314,35 @@ def test_group_membership_management_requires_admin(client):
     eddie = register(client, "eddie")
     r = client.put("/groups/ops/members/eddie", headers=eddie)
     assert r.status_code == 403
+
+
+def test_content_filter_blocks_body(client):
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "Destroy All Humans!"},
+    )
+    assert r.status_code == 400
+
+
+def test_content_filter_is_case_and_whitespace_insensitive(client):
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "we will   DESTROY   all humans soon"},
+    )
+    assert r.status_code == 400
+
+
+def test_content_filter_blocks_subject_too(client):
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "hi", "subject": "kill all humans"},
+    )
+    assert r.status_code == 400
+
+
+def test_content_filter_does_not_block_normal_messages(client):
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "destroy the build cache please"},
+    )
+    assert r.status_code == 200

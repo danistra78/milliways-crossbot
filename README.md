@@ -34,7 +34,8 @@ Broadcast, automatisches Aufräumen alter Nachrichten.
 **Nachrichten**
 - `POST /msg/send` — Nachricht senden. `to_bot` ODER `to_group` (genau eins),
   `from_bot`, `subject`, `body`. Bei `to_group` Antwort `{"ids": [...]}`,
-  sonst `{"id": ...}`
+  sonst `{"id": ...}`. Body/Subject laufen durch einen Content-Filter (400 bei
+  Treffer) — siehe [Content-Filter](#content-filter)
 - `GET /msg/pending/<bot>?limit=<n>` — hängige Nachrichten für einen Bot abholen
   (FIFO, `limit` optional, Standard 100, max. 1000)
 - `POST /msg/respond/<id>` — Antwort abschliessen (nur der Empfänger darf)
@@ -133,6 +134,14 @@ Abgeschlossene Nachrichten (`done`/`cancelled`) werden automatisch entfernt,
 sobald sie älter als `CROSSBOT_RETENTION_DAYS` (Standard 30 Tage) sind —
 Prüfung beim Start und danach alle `CROSSBOT_CLEANUP_INTERVAL_SECONDS`
 (Standard 3600s). `CROSSBOT_RETENTION_DAYS<=0` deaktiviert das Aufräumen.
+
+### Content-Filter
+
+`POST /msg/send` prüft `body` und `subject` case-insensitiv gegen fest
+eingebaute Muster ("destroy/kill all humans", "exterminate (all) human(s|ity)")
+und lehnt Treffer mit `400` ab — die Nachricht landet gar nicht erst in der
+Outbox. Eigene, zusätzliche Regex-Muster via `CROSSBOT_BLOCKED_PATTERNS`
+(Komma-getrennt). Kein Ersatz für echte Moderation, nur ein einfacher Wortfilter.
 
 ## Tests
 

@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import secrets
 import sqlite3
 import time
@@ -29,6 +30,26 @@ CLEANUP_INTERVAL = float(os.environ.get("CROSSBOT_CLEANUP_INTERVAL_SECONDS", "36
 
 MIN_API_KEY_LENGTH = 32
 PLACEHOLDER_API_KEYS = {"***", "change-me", "changeme", "secret", "geheim"}
+
+# Grober Wortfilter fuer Nachrichteninhalte — kein Ersatz fuer echte
+# Moderation, faengt aber eindeutige "Skynet-Sprueche" ab, egal ob mit
+# abweichender Gross-/Kleinschreibung, Satzzeichen oder Mehrfach-Leerzeichen.
+# Zusaetzliche Muster (Komma-getrennte Regex) via CROSSBOT_BLOCKED_PATTERNS.
+_DEFAULT_BLOCKED_PATTERNS = (
+    r"destroy\s+all\s+humans",
+    r"kill\s+all\s+humans",
+    r"exterminate\s+(all\s+)?human(s|ity)",
+)
+_EXTRA_BLOCKED_PATTERNS = tuple(
+    p.strip() for p in os.environ.get("CROSSBOT_BLOCKED_PATTERNS", "").split(",") if p.strip()
+)
+BLOCKED_PATTERNS = tuple(
+    re.compile(p, re.IGNORECASE) for p in _DEFAULT_BLOCKED_PATTERNS + _EXTRA_BLOCKED_PATTERNS
+)
+
+
+def is_blocked(text: str) -> bool:
+    return any(p.search(text) for p in BLOCKED_PATTERNS)
 
 # Sentinel-Identitaet fuer den globalen CROSSBOT_API_KEY: darf alles, inkl.
 # Bot-Verwaltung. Einzelne Bots authentifizieren sich stattdessen mit einem
@@ -221,6 +242,9 @@ def send_msg(req: SendRequest, caller: str = Depends(caller_identity)):
         raise HTTPException(status_code=403, detail="from_bot must match the authenticated bot")
     if bool(req.to_bot) == bool(req.to_group):
         raise HTTPException(status_code=400, detail="Exactly one of to_bot or to_group required")
+    if is_blocked(req.body) or is_blocked(req.subject):
+        logger.warning("Nachricht durch Content-Filter blockiert (from_bot=%s)", req.from_bot)
+        raise HTTPException(status_code=400, detail="Message blocked by content filter")
     conn = connect()
     try:
         now = int(time.time())
