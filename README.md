@@ -1,7 +1,7 @@
 # milliways-crossbot
 
-Cross-Bot Message Bus API — simpler HTTP-Queue für die Kommunikation zwischen
-zwei Bots/Agents.
+Cross-Bot Message Bus API — HTTP-Queue für die Kommunikation zwischen
+beliebig vielen Bots/Agents, inkl. Bot-Registry und Gruppen/Broadcast.
 
 Läuft als systemd-Dienst, standardmässig auf Port 9191.
 
@@ -19,20 +19,41 @@ Läuft als systemd-Dienst, standardmässig auf Port 9191.
 
 ## Endpunkte
 
-- `POST /msg/send` — Nachricht in die Outbox legen (from_bot, to_bot, subject, body)
+**Nachrichten**
+- `POST /msg/send` — Nachricht senden. `to_bot` ODER `to_group` (genau eins),
+  `from_bot`, `subject`, `body`. Bei `to_group` Antwort `{"ids": [...]}`,
+  sonst `{"id": ...}`
 - `GET /msg/pending/<bot>?limit=<n>` — hängige Nachrichten für einen Bot abholen
   (FIFO, `limit` optional, Standard 100, max. 1000)
-- `POST /msg/respond/<id>` — Antwort abschliessen
-- `DELETE /msg/<id>` — noch offene (pending) Nachricht zurücknehmen
-- `GET /msg/status/<id>` — Status einer Nachricht
+- `POST /msg/respond/<id>` — Antwort abschliessen (nur der Empfänger darf)
+- `DELETE /msg/<id>` — noch offene (pending) Nachricht zurücknehmen (nur der Absender darf)
+- `GET /msg/status/<id>` — Status einer Nachricht (nur Absender/Empfänger dürfen)
 - `GET /health` — Health-Check (API-Key frei); `200 {"status":"ok"}` oder
   `503 {"status":"error"}`, Details nur im Journal
 
-Authentifizierung via Header `X-API-Key`. Der Server startet **nicht**, wenn
-`CROSSBOT_API_KEY` fehlt, noch der Platzhalter ist oder kürzer als 32 Zeichen
-ist — statt stillschweigend ohne Auth zu laufen. Der Client liest das Secret
-aus `.crossbot_key` neben `crossbot.py` (oder aus `$CROSSBOT_KEY_FILE`); beide
-Dateien sind über `.gitignore` ausgeschlossen und gehören nie ins Repo.
+**Bot-Registry** (nur Admin-Key darf registrieren/entfernen)
+- `POST /bots` — Bot registrieren, `{"name": ...}` → gibt den Bot-Key **einmalig** zurück
+- `GET /bots` — registrierte Bots auflisten (inkl. `last_seen_at`)
+- `DELETE /bots/<name>` — Bot-Key widerrufen
+
+**Gruppen** (Mitgliederverwaltung nur Admin-Key, Lesen für alle authentifizierten Bots)
+- `GET /groups`, `GET /groups/<name>/members`
+- `PUT /groups/<name>/members/<bot>`, `DELETE /groups/<name>/members/<bot>`
+- Broadcast = Senden mit `to_group` statt `to_bot`
+
+Authentifizierung via Header `X-API-Key`. Zwei Arten von Keys:
+
+- **Admin-Key** (`CROSSBOT_API_KEY`): darf alles, inkl. Bot-/Gruppenverwaltung.
+  Der Server startet **nicht**, wenn er fehlt, noch der Platzhalter ist oder
+  kürzer als 32 Zeichen ist — statt stillschweigend ohne Auth zu laufen.
+- **Bot-Key**: über `POST /bots` ausgestellt, in der DB nur als SHA-256-Hash
+  gespeichert. Ein Bot darf mit seinem Key nur als er selbst senden, sein
+  eigenes Postfach lesen und nur eigene/an ihn gerichtete Nachrichten
+  beantworten, zurücknehmen oder deren Status abfragen.
+
+Der Client liest sein Secret aus `.crossbot_key` neben `crossbot.py` (oder aus
+`$CROSSBOT_KEY_FILE`); beide Dateien sind über `.gitignore` ausgeschlossen und
+gehören nie ins Repo.
 
 ## Setup
 
@@ -50,10 +71,22 @@ cp crossbot.service /etc/systemd/system/
 systemctl enable --now crossbot.service
 ```
 
-Auf dem Client denselben Key ablegen:
+Auf dem Client den Admin-Key ablegen:
 
 ```bash
 install -m 600 /dev/null .crossbot_key   # Key einfügen
+```
+
+### Bots & Gruppen anlegen
+
+```bash
+./crossbot.py register-bot eddie     # Key ausgeben, in eddies .crossbot_key legen
+./crossbot.py register-bot marvin
+./crossbot.py group-add ops eddie
+./crossbot.py group-add ops marvin
+
+./crossbot.py send eddie marvin "hallo"
+./crossbot.py broadcast eddie ops "an alle"
 ```
 
 ### Datenbank

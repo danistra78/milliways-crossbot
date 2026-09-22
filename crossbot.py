@@ -3,10 +3,18 @@
 
 Usage:
   crossbot.py send <from> <to> "<body>" [subject]
+  crossbot.py broadcast <from> <group> "<body>" [subject]
   crossbot.py pending <bot_name> [limit]
   crossbot.py respond <msg_id> "<response>"
   crossbot.py status <msg_id>
   crossbot.py cancel <msg_id>
+  crossbot.py register-bot <name>          (Admin-Key noetig)
+  crossbot.py revoke-bot <name>            (Admin-Key noetig)
+  crossbot.py bots
+  crossbot.py groups
+  crossbot.py group-members <group>
+  crossbot.py group-add <group> <bot>      (Admin-Key noetig)
+  crossbot.py group-remove <group> <bot>   (Admin-Key noetig)
 """
 
 import sys, os, json, urllib.request, urllib.error
@@ -97,11 +105,46 @@ if __name__ == "__main__":
         r = req("DELETE", f"/msg/{seg(sys.argv[2])}")
         print(f"#{r['id']} zurueckgenommen ({r['status']})")
 
+    elif cmd == "broadcast" and len(sys.argv) >= 5:
+        r = req("POST", "/msg/send", {
+            "from_bot": sys.argv[2],
+            "to_group": sys.argv[3],
+            "body": sys.argv[4],
+            "subject": sys.argv[5] if len(sys.argv) > 5 else ""
+        })
+        print(f"gesendet an {len(r['ids'])} Empfaenger: {r['ids']} ({r['status']})")
+
+    elif cmd == "register-bot" and len(sys.argv) >= 3:
+        r = req("POST", "/bots", {"name": sys.argv[2]})
+        print(f"Bot '{r['name']}' registriert. Key (nur jetzt sichtbar):\n{r['api_key']}")
+
+    elif cmd == "revoke-bot" and len(sys.argv) >= 3:
+        r = req("DELETE", f"/bots/{seg(sys.argv[2])}")
+        print(f"Bot '{r['name']}' {r['status']}")
+
+    elif cmd == "bots":
+        r = req("GET", "/bots")
+        for b in r.get("bots", []):
+            print(f"  {b['name']} (last_seen: {b.get('last_seen_at')})")
+
+    elif cmd == "groups":
+        r = req("GET", "/groups")
+        for g in r.get("groups", []):
+            print(f"  {g}")
+
+    elif cmd == "group-members" and len(sys.argv) >= 3:
+        r = req("GET", f"/groups/{seg(sys.argv[2])}/members")
+        for m in r.get("members", []):
+            print(f"  {m}")
+
+    elif cmd == "group-add" and len(sys.argv) >= 4:
+        r = req("PUT", f"/groups/{seg(sys.argv[2])}/members/{seg(sys.argv[3])}")
+        print(f"'{r['bot']}' zu Gruppe '{r['group']}' hinzugefuegt")
+
+    elif cmd == "group-remove" and len(sys.argv) >= 4:
+        r = req("DELETE", f"/groups/{seg(sys.argv[2])}/members/{seg(sys.argv[3])}")
+        print(f"'{r['bot']}' aus Gruppe '{r['group']}' entfernt")
+
     else:
-        print("Usage:")
-        print("  send <from> <to> <body> [subject]")
-        print("  pending <bot_name> [limit]")
-        print("  respond <msg_id> <response>")
-        print("  status <msg_id>")
-        print("  cancel <msg_id>")
+        print(__doc__)
         sys.exit(1)

@@ -154,3 +154,163 @@ def test_cleanup_removes_old_done_messages(crossbot_env):
         assert row is None
     finally:
         conn.close()
+
+
+def register(client, name):
+    r = client.post("/bots", headers=HEADERS, json={"name": name})
+    assert r.status_code == 200
+    return {"X-API-Key": r.json()["api_key"]}
+
+
+def test_register_bot_requires_admin(client):
+    eddie = register(client, "eddie")
+    r = client.post("/bots", headers=eddie, json={"name": "marvin"})
+    assert r.status_code == 403
+
+
+def test_register_duplicate_bot_is_rejected(client):
+    register(client, "eddie")
+    r = client.post("/bots", headers=HEADERS, json={"name": "eddie"})
+    assert r.status_code == 409
+
+
+def test_bot_scoped_key_can_only_send_as_self(client):
+    eddie = register(client, "eddie")
+    register(client, "marvin")
+
+    r = client.post(
+        "/msg/send", headers=eddie,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "hi"},
+    )
+    assert r.status_code == 200
+
+    r = client.post(
+        "/msg/send", headers=eddie,
+        json={"from_bot": "marvin", "to_bot": "eddie", "body": "spoofed"},
+    )
+    assert r.status_code == 403
+
+
+def test_bot_scoped_key_can_only_fetch_own_inbox(client):
+    eddie = register(client, "eddie")
+    marvin = register(client, "marvin")
+    client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "hi"},
+    )
+
+    r = client.get("/msg/pending/eddie", headers=marvin)
+    assert r.status_code == 403
+
+    r = client.get("/msg/pending/marvin", headers=marvin)
+    assert r.status_code == 200
+    assert len(r.json()["messages"]) == 1
+
+
+def test_bot_scoped_key_can_only_respond_to_own_messages(client):
+    eddie = register(client, "eddie")
+    marvin = register(client, "marvin")
+    msg_id = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "hi"},
+    ).json()["id"]
+
+    r = client.post(f"/msg/respond/{msg_id}", headers=eddie, json={"response_text": "nope"})
+    assert r.status_code == 403
+
+    r = client.post(f"/msg/respond/{msg_id}", headers=marvin, json={"response_text": "ok"})
+    assert r.status_code == 200
+
+
+def test_bot_scoped_key_can_only_cancel_own_sent_messages(client):
+    eddie = register(client, "eddie")
+    marvin = register(client, "marvin")
+    msg_id = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "body": "hi"},
+    ).json()["id"]
+
+    r = client.delete(f"/msg/{msg_id}", headers=marvin)
+    assert r.status_code == 403
+
+    r = client.delete(f"/msg/{msg_id}", headers=eddie)
+    assert r.status_code == 200
+
+
+def test_revoked_bot_key_no_longer_works(client):
+    eddie = register(client, "eddie")
+    r = client.delete("/bots/eddie", headers=HEADERS)
+    assert r.status_code == 200
+
+    r = client.get("/msg/pending/eddie", headers=eddie)
+    assert r.status_code == 403
+
+
+def test_broadcast_via_group(client):
+    register(client, "eddie")
+    register(client, "marvin")
+    register(client, "ford")
+
+    client.put("/groups/ops/members/eddie", headers=HEADERS)
+    client.put("/groups/ops/members/marvin", headers=HEADERS)
+
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "ford", "to_group": "ops", "body": "achtung"},
+    )
+    assert r.status_code == 200
+    assert sorted(r.json()["ids"]) == r.json()["ids"]
+    assert len(r.json()["ids"]) == 2
+
+    for bot in ("eddie", "marvin"):
+        pending = client.get(f"/msg/pending/{bot}", headers=HEADERS).json()["messages"]
+        assert len(pending) == 1
+        assert pending[0]["body"] == "achtung"
+
+
+def test_send_requires_exactly_one_of_to_bot_or_to_group(client):
+    register(client, "eddie")
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "body": "hi"},
+    )
+    assert r.status_code == 400
+
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_bot": "marvin", "to_group": "ops", "body": "hi"},
+    )
+    assert r.status_code == 400
+
+
+def test_send_to_unknown_group_is_rejected(client):
+    register(client, "eddie")
+    r = client.post(
+        "/msg/send", headers=HEADERS,
+        json={"from_bot": "eddie", "to_group": "does-not-exist", "body": "hi"},
+    )
+    assert r.status_code == 404
+
+
+def test_group_membership_management(client):
+    register(client, "eddie")
+    r = client.put("/groups/ops/members/eddie", headers=HEADERS)
+    assert r.status_code == 200
+
+    r = client.get("/groups", headers=HEADERS)
+    assert r.json()["groups"] == ["ops"]
+
+    r = client.get("/groups/ops/members", headers=HEADERS)
+    assert r.json()["members"] == ["eddie"]
+
+    r = client.delete("/groups/ops/members/eddie", headers=HEADERS)
+    assert r.status_code == 200
+
+    r = client.get("/groups/ops/members", headers=HEADERS)
+    assert r.json()["members"] == []
+
+
+def test_group_membership_management_requires_admin(client):
+    eddie = register(client, "eddie")
+    r = client.put("/groups/ops/members/eddie", headers=eddie)
+    assert r.status_code == 403
