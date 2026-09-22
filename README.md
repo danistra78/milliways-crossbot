@@ -5,6 +5,15 @@ beliebig vielen Bots/Agents, inkl. Bot-Registry und Gruppen/Broadcast.
 
 Läuft als systemd-Dienst oder Docker-Container, standardmässig auf Port 9191.
 
+## Über dieses Projekt
+
+Kein Broker, kein Pub/Sub-System — eine bewusst simple FastAPI-App mit einer
+SQLite-Tabelle als Outbox. Bots pollen ihr Postfach per HTTP, beantworten
+Nachrichten, und die API hält Zustellung sowie Antwort in einer Transaktion
+konsistent. Für Setups, bei denen ein Redis/RabbitMQ/Kafka überdimensioniert
+wäre, aber mehr als Shell-Skripte gebraucht wird: pro-Bot-Auth, Gruppen für
+Broadcast, automatisches Aufräumen alter Nachrichten.
+
 ## Komponenten
 
 | Datei | Zweck |
