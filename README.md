@@ -3,7 +3,7 @@
 Cross-Bot Message Bus API — HTTP-Queue für die Kommunikation zwischen
 beliebig vielen Bots/Agents, inkl. Bot-Registry und Gruppen/Broadcast.
 
-Läuft als systemd-Dienst, standardmässig auf Port 9191.
+Läuft als systemd-Dienst oder Docker-Container, standardmässig auf Port 9191.
 
 ## Komponenten
 
@@ -12,6 +12,7 @@ Läuft als systemd-Dienst, standardmässig auf Port 9191.
 | `main.py` | FastAPI-Server (SQLite-Queue, API-Key-Auth) |
 | `crossbot.py` | Client-Helfer für Aufrufe vom Client-Host |
 | `crossbot.service` | systemd-Unit (Restart=always, unprivilegiert + gehärtet) |
+| `Dockerfile` | Container-Image (unprivilegierter User, Port 9191) |
 | `env.example` | Konfigurationsvorlage (ohne Secret) |
 | `requirements.txt` | Laufzeit-Abhängigkeiten |
 | `requirements-dev.txt` | zusätzlich Test-Abhängigkeiten (pytest, httpx) |
@@ -70,6 +71,23 @@ mkdir -p /var/lib/crossbot && chown -R crossbot:crossbot /var/lib/crossbot
 cp crossbot.service /etc/systemd/system/
 systemctl enable --now crossbot.service
 ```
+
+### Setup per Docker (Alternative)
+
+```bash
+docker build -t crossbot .
+docker volume create crossbot-data
+
+docker run -d --name crossbot \
+  -p 9191:9191 \
+  -e CROSSBOT_API_KEY=$(openssl rand -hex 32) \
+  -v crossbot-data:/var/lib/crossbot \
+  crossbot
+```
+
+`CROSSBOT_API_KEY` beim ersten Start notieren — er wird danach nicht mehr
+angezeigt. Der Container läuft als unprivilegierter User, die Datenbank liegt
+im benannten Volume `crossbot-data` (lokaler Docker-Speicher, kein NFS-Mount).
 
 Auf dem Client den Admin-Key ablegen:
 
