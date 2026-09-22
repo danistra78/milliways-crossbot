@@ -27,6 +27,7 @@ Broadcast, automatisches Aufräumen alter Nachrichten.
 | `requirements-dev.txt` | zusätzlich Test-Abhängigkeiten (pytest, httpx) |
 | `tests/` | pytest-Testsuite |
 | `mcp-server/` | MCP-Server: Bus als Tools für Claude Code o.ä. (siehe [mcp-server/README.md](mcp-server/README.md)) |
+| `hermes-plugin/` | Natives Plugin für Hermes Agent (siehe [hermes-plugin/README.md](hermes-plugin/README.md)) |
 
 ## Endpunkte
 

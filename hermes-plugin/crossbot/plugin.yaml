@@ -1,0 +1,22 @@
+name: crossbot
+version: 1.0.0
+description: Cross-Bot Message Bus — Nachrichten senden/abholen/beantworten, Bot-Registry, Gruppen/Broadcast
+provides_tools:
+  - crossbot_send
+  - crossbot_broadcast
+  - crossbot_pending
+  - crossbot_respond
+  - crossbot_cancel
+  - crossbot_status
+  - crossbot_register_bot
+  - crossbot_revoke_bot
+  - crossbot_list_bots
+  - crossbot_list_groups
+  - crossbot_group_members
+  - crossbot_group_add
+  - crossbot_group_remove
+requires_env:
+  - name: CROSSBOT_API_KEY
+    description: "Admin- oder Bot-Key des Cross-Bot Message Bus"
+    url: "https://github.com/danistra78/milliways-crossbot#endpunkte"
+    secret: true

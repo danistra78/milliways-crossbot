@@ -1,67 +1,23 @@
 import importlib
-import socket
 import sys
-import threading
-import time
 from pathlib import Path
 
 import pytest
-import uvicorn
 
 VALID_KEY = "a" * 32
 MCP_SERVER_DIR = Path(__file__).resolve().parent.parent / "mcp-server"
 sys.path.insert(0, str(MCP_SERVER_DIR))
 
 
-def _free_port() -> int:
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
-
-
-class _ServerThread(threading.Thread):
-    def __init__(self, app, host: str, port: int):
-        super().__init__(daemon=True)
-        self.server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
-
-    def run(self):
-        self.server.run()
-
-    def stop(self):
-        self.server.should_exit = True
-
-
 @pytest.fixture
-def crossbot_mcp(crossbot_env, monkeypatch):
-    """Startet main.py als echten HTTP-Server (Bot-Key-Auth braucht mehrere
-    unabhaengige Requests) und laedt crossbot_mcp.py mit passender Config neu."""
-    port = _free_port()
-    thread = _ServerThread(crossbot_env.app, "127.0.0.1", port)
-    thread.start()
-    for _ in range(100):
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                break
-        except OSError:
-            time.sleep(0.05)
-    else:
-        raise RuntimeError("Test-Server nicht hochgekommen")
-
-    monkeypatch.setenv("CROSSBOT_API_URL", f"http://127.0.0.1:{port}")
+def crossbot_mcp(live_crossbot_server, monkeypatch):
+    """Laedt crossbot_mcp.py mit Config passend zum laufenden Test-Server neu."""
+    monkeypatch.setenv("CROSSBOT_API_URL", f"http://127.0.0.1:{live_crossbot_server}")
     monkeypatch.setenv("CROSSBOT_API_KEY", VALID_KEY)
 
     if "crossbot_mcp" in sys.modules:
-        module = importlib.reload(sys.modules["crossbot_mcp"])
-    else:
-        module = importlib.import_module("crossbot_mcp")
-
-    try:
-        yield module
-    finally:
-        thread.stop()
-        thread.join(timeout=5)
+        return importlib.reload(sys.modules["crossbot_mcp"])
+    return importlib.import_module("crossbot_mcp")
 
 
 def test_send_and_pending(crossbot_mcp):
