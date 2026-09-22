@@ -67,3 +67,7 @@ Archiviert im September 2026 vom Container-Datenträger (LXC 101, read-only
 eingehängt), nachdem der Container gestoppt war. Code anschliessend um die
 Findings eines Reviews bereinigt (Auth fail-closed, Transaktions-Integrität in
 `/msg/respond`, Health-Check, systemd-Härtung).
+
+## Lizenz
+
+MIT, siehe [LICENSE](LICENSE).
