@@ -1,17 +1,16 @@
 # milliways-crossbot
 
 Cross-Bot Message Bus API — simpler HTTP-Queue für die Kommunikation zwischen
-Eddie (Infrastruktur-Agent, chronos) und Marvin (Developer-Agent).
+zwei Bots/Agents.
 
-Lief als systemd-Dienst auf dem LXC `milliways` (VMID 101, Proxmox/Magrathea,
-192.168.0.10) auf Port 9191.
+Läuft als systemd-Dienst, standardmässig auf Port 9191.
 
 ## Komponenten
 
 | Datei | Zweck |
 |---|---|
 | `main.py` | FastAPI-Server (SQLite-Queue, API-Key-Auth) |
-| `crossbot.py` | Client-Helfer für Aufrufe vom PVE-Host |
+| `crossbot.py` | Client-Helfer für Aufrufe vom Client-Host |
 | `crossbot.service` | systemd-Unit (Restart=always, unprivilegiert + gehärtet) |
 | `env.example` | Konfigurationsvorlage (ohne Secret) |
 
@@ -40,13 +39,13 @@ python3 -m venv /opt/crossbot
 cp env.example /opt/crossbot/env
 openssl rand -hex 32   # Ergebnis als CROSSBOT_API_KEY in /opt/crossbot/env eintragen
 chown root:crossbot /opt/crossbot/env && chmod 640 /opt/crossbot/env
-chown -R crossbot:crossbot /export/hermes-shared
+chown -R crossbot:crossbot /pfad/zur/datenbank
 
 cp crossbot.service /etc/systemd/system/
 systemctl enable --now crossbot.service
 ```
 
-Auf dem Client (PVE-Host) denselben Key ablegen:
+Auf dem Client denselben Key ablegen:
 
 ```bash
 install -m 600 /dev/null .crossbot_key   # Key einfügen
@@ -63,10 +62,10 @@ tatsächlichen Pfad anpassen.
 
 ## Status
 
-Archiviert im September 2026 vom Container-Datenträger (LXC 101, read-only
-eingehängt), nachdem der Container gestoppt war. Code anschliessend um die
-Findings eines Reviews bereinigt (Auth fail-closed, Transaktions-Integrität in
-`/msg/respond`, Health-Check, systemd-Härtung).
+Archiviert im September 2026 vom ursprünglichen Container-Datenträger, nachdem
+dieser gestoppt war. Code anschliessend um die Findings eines Reviews bereinigt
+(Auth fail-closed, Transaktions-Integrität in `/msg/respond`, Health-Check,
+systemd-Härtung).
 
 ## Lizenz
 
