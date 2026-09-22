@@ -26,6 +26,7 @@ Broadcast, automatisches Aufräumen alter Nachrichten.
 | `requirements.txt` | Laufzeit-Abhängigkeiten |
 | `requirements-dev.txt` | zusätzlich Test-Abhängigkeiten (pytest, httpx) |
 | `tests/` | pytest-Testsuite |
+| `mcp-server/` | MCP-Server: Bus als Tools für Claude Code o.ä. (siehe [mcp-server/README.md](mcp-server/README.md)) |
 
 ## Endpunkte
 
