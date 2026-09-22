@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-DB_PATH = os.environ.get("CROSSBOT_DB_PATH", "/export/hermes-shared/multi_agent_tg_shared.db")
+DB_PATH = os.environ.get("CROSSBOT_DB_PATH", "/var/lib/crossbot/crossbot.db")
 API_KEY = os.environ.get("CROSSBOT_API_KEY", "")
 HOST = os.environ.get("CROSSBOT_HOST", "0.0.0.0")
 PORT = int(os.environ.get("CROSSBOT_PORT", "9191"))

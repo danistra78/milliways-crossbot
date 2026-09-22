@@ -21,7 +21,7 @@ import sys, os, json, urllib.request, urllib.error
 from typing import NoReturn
 from urllib.parse import quote
 
-API = os.environ.get("CROSSBOT_API_URL", "http://192.168.0.10:9191")
+API = os.environ.get("CROSSBOT_API_URL", "http://localhost:9191")
 KEY_FILE = os.environ.get("CROSSBOT_KEY_FILE", os.path.join(os.path.dirname(__file__), ".crossbot_key"))
 
 def fail(message) -> NoReturn:

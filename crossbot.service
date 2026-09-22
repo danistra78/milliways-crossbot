@@ -1,5 +1,5 @@
 [Unit]
-Description=Cross-Bot Message Bus API (Eddie <-> Marvin)
+Description=Cross-Bot Message Bus API
 After=network.target
 
 [Service]
@@ -30,7 +30,7 @@ LockPersonality=yes
 MemoryDenyWriteExecute=yes
 # WAL/SHM-Dateien entstehen neben der Datenbank — das Verzeichnis, nicht nur
 # die Datei, muss schreibbar sein.
-ReadWritePaths=/export/hermes-shared
+ReadWritePaths=/var/lib/crossbot
 
 [Install]
 WantedBy=multi-user.target

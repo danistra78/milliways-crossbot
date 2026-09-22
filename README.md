@@ -65,7 +65,7 @@ python3 -m venv /opt/crossbot
 cp env.example /opt/crossbot/env
 openssl rand -hex 32   # Ergebnis als CROSSBOT_API_KEY in /opt/crossbot/env eintragen
 chown root:crossbot /opt/crossbot/env && chmod 640 /opt/crossbot/env
-chown -R crossbot:crossbot /pfad/zur/datenbank
+mkdir -p /var/lib/crossbot && chown -R crossbot:crossbot /var/lib/crossbot
 
 cp crossbot.service /etc/systemd/system/
 systemctl enable --now crossbot.service
