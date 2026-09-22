@@ -3,9 +3,10 @@
 
 Usage:
   crossbot.py send <from> <to> "<body>" [subject]
-  crossbot.py pending <bot_name>
+  crossbot.py pending <bot_name> [limit]
   crossbot.py respond <msg_id> "<response>"
   crossbot.py status <msg_id>
+  crossbot.py cancel <msg_id>
 """
 
 import sys, os, json, urllib.request, urllib.error
@@ -72,7 +73,10 @@ if __name__ == "__main__":
         print(f"#{r['id']} gesendet ({r['status']})")
 
     elif cmd == "pending" and len(sys.argv) >= 3:
-        r = req("GET", f"/msg/pending/{seg(sys.argv[2])}")
+        path = f"/msg/pending/{seg(sys.argv[2])}"
+        if len(sys.argv) > 3:
+            path += f"?limit={seg(sys.argv[3])}"
+        r = req("GET", path)
         msgs = r.get("messages", [])
         if not msgs:
             print("Keine pending Nachrichten.")
@@ -89,10 +93,15 @@ if __name__ == "__main__":
         r = req("GET", f"/msg/status/{seg(sys.argv[2])}")
         print(json.dumps(r, indent=2, default=str))
 
+    elif cmd == "cancel" and len(sys.argv) >= 3:
+        r = req("DELETE", f"/msg/{seg(sys.argv[2])}")
+        print(f"#{r['id']} zurueckgenommen ({r['status']})")
+
     else:
         print("Usage:")
         print("  send <from> <to> <body> [subject]")
-        print("  pending <bot_name>")
+        print("  pending <bot_name> [limit]")
         print("  respond <msg_id> <response>")
         print("  status <msg_id>")
+        print("  cancel <msg_id>")
         sys.exit(1)

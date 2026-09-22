@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cross-Bot Message Bus API — fuer Eddie & Marvin."""
 
+import asyncio
 import hmac
 import logging
 import os
@@ -9,7 +10,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -19,6 +20,10 @@ HOST = os.environ.get("CROSSBOT_HOST", "0.0.0.0")
 PORT = int(os.environ.get("CROSSBOT_PORT", "9191"))
 # Wartezeit auf eine belegte Schreibsperre, bevor SQLite "database is locked" meldet.
 BUSY_TIMEOUT = float(os.environ.get("CROSSBOT_BUSY_TIMEOUT", "5.0"))
+# Wie lange abgeschlossene (done/cancelled) Nachrichten aufbewahrt werden, bevor
+# sie aufgeraeumt werden. <= 0 deaktiviert das Aufraeumen.
+RETENTION_DAYS = float(os.environ.get("CROSSBOT_RETENTION_DAYS", "30"))
+CLEANUP_INTERVAL = float(os.environ.get("CROSSBOT_CLEANUP_INTERVAL_SECONDS", "3600"))
 
 MIN_API_KEY_LENGTH = 32
 PLACEHOLDER_API_KEYS = {"***", "change-me", "changeme", "secret", "geheim"}
@@ -101,13 +106,59 @@ def verify_key(x_api_key: Optional[str]) -> None:
         raise HTTPException(status_code=403, detail="Invalid API Key")
 
 
+def cleanup_old_messages() -> int:
+    """Loescht abgeschlossene Nachrichten (done/cancelled) aelter als RETENTION_DAYS.
+
+    Gibt die Anzahl geloeschter outbox-Zeilen zurueck. RETENTION_DAYS <= 0
+    deaktiviert das Aufraeumen.
+    """
+    if RETENTION_DAYS <= 0:
+        return 0
+    cutoff = int(time.time() - RETENTION_DAYS * 86400)
+    conn = connect()
+    try:
+        with conn:
+            conn.execute(
+                "DELETE FROM response_log WHERE outbox_id IN ("
+                "SELECT id FROM outbox WHERE status IN ('done', 'cancelled') "
+                "AND completed_at IS NOT NULL AND completed_at < ?)",
+                (cutoff,),
+            )
+            cur = conn.execute(
+                "DELETE FROM outbox WHERE status IN ('done', 'cancelled') "
+                "AND completed_at IS NOT NULL AND completed_at < ?",
+                (cutoff,),
+            )
+            return cur.rowcount
+    finally:
+        conn.close()
+
+
+async def cleanup_loop() -> None:
+    """Raeumt periodisch alte Nachrichten weg, bis der Task abgebrochen wird."""
+    while True:
+        await asyncio.sleep(CLEANUP_INTERVAL)
+        try:
+            deleted = cleanup_old_messages()
+            if deleted:
+                logger.info("Aufraeumen: %d abgeschlossene Nachricht(en) entfernt", deleted)
+        except Exception:
+            logger.exception("Aufraeumen fehlgeschlagen")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     problem = api_key_problem(API_KEY)
     if problem is not None:
         raise RuntimeError(f"Start abgebrochen: {problem}")
     init_schema()
-    yield
+    cleanup_old_messages()
+    task = asyncio.create_task(cleanup_loop()) if CLEANUP_INTERVAL > 0 and RETENTION_DAYS > 0 else None
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
 
 app = FastAPI(title="Cross-Bot Message Bus", version="1.0", lifespan=lifespan)
 
@@ -129,7 +180,11 @@ def send_msg(req: SendRequest, x_api_key: Optional[str] = Header(None)):
 
 
 @app.get("/msg/pending/{bot_name}")
-def get_pending(bot_name: str, x_api_key: Optional[str] = Header(None)):
+def get_pending(
+    bot_name: str,
+    x_api_key: Optional[str] = Header(None),
+    limit: int = Query(100, ge=1, le=1000),
+):
     verify_key(x_api_key)
     conn = connect()
     try:
@@ -137,10 +192,29 @@ def get_pending(bot_name: str, x_api_key: Optional[str] = Header(None)):
             # id als Tiebreaker: ts hat nur Sekundenaufloesung, sonst ist die
             # Reihenfolge zweier Nachrichten aus derselben Sekunde beliebig.
             "SELECT id, ts, from_bot, to_bot, subject, body, status FROM outbox "
-            "WHERE to_bot=? AND status='pending' ORDER BY ts ASC, id ASC",
-            (bot_name,),
+            "WHERE to_bot=? AND status='pending' ORDER BY ts ASC, id ASC LIMIT ?",
+            (bot_name, limit),
         ).fetchall()
         return {"messages": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@app.delete("/msg/{msg_id}")
+def cancel(msg_id: int, x_api_key: Optional[str] = Header(None)):
+    """Nimmt eine noch nicht abgeholte/beantwortete Nachricht zurueck."""
+    verify_key(x_api_key)
+    conn = connect()
+    try:
+        now = int(time.time())
+        with conn:
+            cur = conn.execute(
+                "UPDATE outbox SET status='cancelled', completed_at=? WHERE id=? AND status='pending'",
+                (now, msg_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Not found or already answered")
+        return {"id": msg_id, "status": "cancelled"}
     finally:
         conn.close()
 

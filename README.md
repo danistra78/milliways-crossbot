@@ -13,12 +13,17 @@ Läuft als systemd-Dienst, standardmässig auf Port 9191.
 | `crossbot.py` | Client-Helfer für Aufrufe vom Client-Host |
 | `crossbot.service` | systemd-Unit (Restart=always, unprivilegiert + gehärtet) |
 | `env.example` | Konfigurationsvorlage (ohne Secret) |
+| `requirements.txt` | Laufzeit-Abhängigkeiten |
+| `requirements-dev.txt` | zusätzlich Test-Abhängigkeiten (pytest, httpx) |
+| `tests/` | pytest-Testsuite |
 
 ## Endpunkte
 
 - `POST /msg/send` — Nachricht in die Outbox legen (from_bot, to_bot, subject, body)
-- `GET /msg/pending/<bot>` — hängige Nachrichten für einen Bot abholen (FIFO)
+- `GET /msg/pending/<bot>?limit=<n>` — hängige Nachrichten für einen Bot abholen
+  (FIFO, `limit` optional, Standard 100, max. 1000)
 - `POST /msg/respond/<id>` — Antwort abschliessen
+- `DELETE /msg/<id>` — noch offene (pending) Nachricht zurücknehmen
 - `GET /msg/status/<id>` — Status einer Nachricht
 - `GET /health` — Health-Check (API-Key frei); `200 {"status":"ok"}` oder
   `503 {"status":"error"}`, Details nur im Journal
@@ -34,7 +39,7 @@ Dateien sind über `.gitignore` ausgeschlossen und gehören nie ins Repo.
 ```bash
 useradd --system --home /opt/crossbot --shell /usr/sbin/nologin crossbot
 python3 -m venv /opt/crossbot
-/opt/crossbot/bin/pip install fastapi uvicorn pydantic
+/opt/crossbot/bin/pip install -r requirements.txt
 
 cp env.example /opt/crossbot/env
 openssl rand -hex 32   # Ergebnis als CROSSBOT_API_KEY in /opt/crossbot/env eintragen
@@ -59,6 +64,24 @@ braucht eine gemeinsame Shared-Memory-Datei und funktioniert über NFS/9p nicht;
 eine Warnung ins Journal. Gleichzeitige Schreiber auf einem Netz-Mount riskieren
 `database is locked` bis Korruption. `ReadWritePaths=` in der Unit ggf. an den
 tatsächlichen Pfad anpassen.
+
+### Aufräumen
+
+Abgeschlossene Nachrichten (`done`/`cancelled`) werden automatisch entfernt,
+sobald sie älter als `CROSSBOT_RETENTION_DAYS` (Standard 30 Tage) sind —
+Prüfung beim Start und danach alle `CROSSBOT_CLEANUP_INTERVAL_SECONDS`
+(Standard 3600s). `CROSSBOT_RETENTION_DAYS<=0` deaktiviert das Aufräumen.
+
+## Tests
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest
+```
+
+Läuft auch automatisch per GitHub Actions bei jedem Push/PR
+(`.github/workflows/ci.yml`).
 
 ## Status
 
